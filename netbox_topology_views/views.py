@@ -256,6 +256,7 @@ def create_edge(
     termination_a: Dict,
     termination_b: Dict,
     disable_physics: bool,
+    straight_cables: bool,
     circuit: Optional[Dict] = None,
     cable: Optional[Cable] = None,
     wireless: Optional[Dict] = None,
@@ -320,6 +321,8 @@ def create_edge(
 
     # Invert, because value must be False if disabled
     edge["physics"] = not disable_physics
+    # if straight_cables == True: edge["smooth"] = False
+    edge["smooth"] = not straight_cables
 
     return edge
 
@@ -361,6 +364,7 @@ def get_topology_data(
     group_racks: bool,
     group_id,
     disable_physics: bool,
+    straight_cables: bool,
 ):
     
     supported_termination_types = []
@@ -459,6 +463,7 @@ def get_topology_data(
                         termination_a=termination_a,
                         termination_b=termination_b,
                         disable_physics=disable_physics,
+                        straight_cables=straight_cables,
                     )
                 )
 
@@ -529,6 +534,7 @@ def get_topology_data(
                         termination_b=termination_b,
                         power=True,
                         disable_physics=disable_physics,
+                        straight_cables=straight_cables,
                     )
                 )
 
@@ -573,7 +579,8 @@ def get_topology_data(
                             termination_a=termination_a,
                             termination_b=termination_b,
                             interface=interface,
-                            disable_physics=disable_physics
+                            disable_physics=disable_physics,
+                            straight_cables=straight_cables
                         )
                     )
                     nodes_devices[interface.device.id] = interface.device
@@ -656,6 +663,7 @@ def get_topology_data(
                             termination_a=termination_a,
                             termination_b=termination_b,
                             disable_physics=disable_physics,
+                            straight_cables=straight_cables,
                         )
                     )
 
@@ -695,7 +703,8 @@ def get_topology_data(
                     termination_a=termination_a,
                     termination_b=termination_b,
                     wireless=wireless,
-                    disable_physics=disable_physics
+                    disable_physics=disable_physics,
+                    straight_cables=straight_cables,
                 )
             )
 
@@ -744,7 +753,7 @@ class TopologyHomeView(PermissionRequiredMixin, View):
 
         if request.GET:
 
-            filter_id, save_coords, show_unconnected, show_power, show_circuit, show_logical_connections, show_single_cable_logical_conns, show_cables, show_wireless, group_sites, group_locations, group_racks, show_neighbors, disable_physics = get_query_settings(request)
+            filter_id, save_coords, show_unconnected, show_power, show_circuit, show_logical_connections, show_single_cable_logical_conns, show_cables, show_wireless, group_sites, group_locations, group_racks, show_neighbors, straight_cables, disable_physics = get_query_settings(request)
             
             # Read options from saved filters as NetBox does not handle custom plugin filters
             if "filter_id" in request.GET and request.GET["filter_id"] != '':
@@ -764,6 +773,7 @@ class TopologyHomeView(PermissionRequiredMixin, View):
                     if group_racks == False and 'group_racks' in saved_filter_params: group_racks = saved_filter_params['group_racks']
                     if show_neighbors == False and 'show_neighbors' in saved_filter_params: show_neighbors = saved_filter_params['show_neighbors']
                     if disable_physics == False and 'disable_physics' in saved_filter_params: disable_physics = saved_filter_params['disable_physics']
+                    if straight_cables == False and 'straight_cables' in saved_filter_params: straight_cables = saved_filter_params['straight_cables']
                 except SavedFilter.DoesNotExist: # filter_id not found
                     pass
                 except Exception as inst:
@@ -792,6 +802,7 @@ class TopologyHomeView(PermissionRequiredMixin, View):
                     group_racks=group_racks,
                     group_id=group_id,
                     disable_physics=disable_physics,
+                    straight_cables=straight_cables,
                 )
             
         else:
@@ -820,6 +831,7 @@ class TopologyHomeView(PermissionRequiredMixin, View):
                 q['draw_init'] = "true"
             else:
                 q['draw_init'] = "false"
+            if individualOptions.straight_cables: q['straight_cables'] = "on"
 
             query_string = q.urlencode()
             return HttpResponseRedirect(f"{request.path}?{query_string}")
@@ -1175,6 +1187,7 @@ class TopologyIndividualOptionsView(PermissionRequiredMixin, View):
                 'group_racks': queryset.group_racks,
                 'draw_default_layout': queryset.draw_default_layout,
                 'disable_physics': queryset.disable_physics,
+                'straight_cables': queryset.straight_cables,
             },
         )
 

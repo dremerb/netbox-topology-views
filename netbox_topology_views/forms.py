@@ -36,7 +36,7 @@ class DeviceFilterForm(
         (_('Options'), (
             'group', 'save_coords', 'show_unconnected', 'show_cables', 'show_logical_connections',
             'show_single_cable_logical_conns', 'show_neighbors', 'show_circuit', 'show_power', 'show_wireless', 
-            'group_sites', 'group_locations', 'group_racks', 'disable_physics'
+            'group_sites', 'group_locations', 'group_racks', 'disable_physics', 'straight_cables'
         )),
         (_('Device'), ('id',)),        
         (_('Location'), ('region_id', 'site_group_id', 'site_id', 'location_id', 'rack_id')),
@@ -270,6 +270,8 @@ class DeviceFilterForm(
     )
     disable_physics = forms.BooleanField(
         label =_('Disable Physics'), required=False, initial=False
+    straight_cables = forms.BooleanField(
+        label = _('Straight Cables'), required=False, initial=False
     )
 
 class CoordinateGroupsForm(NetBoxModelForm):
@@ -465,6 +467,7 @@ class IndividualOptionsForm(NetBoxModelForm):
                 'group_racks',
                 'draw_default_layout',
                 'disable_physics',
+                'straight_cables',
             ),
         ),
     )
@@ -599,6 +602,12 @@ class IndividualOptionsForm(NetBoxModelForm):
         initial=False,
         help_text=_('When enables, no forces will act on nodes in the topology and they will only move '
                     'when dragged by hand. Devices without coordinates will be placed at (0, 0) by default.')
+    straight_cables = forms.BooleanField(
+        label=('Use Straight Cables'),
+        required=False,
+        initial=False,
+        help_text=_('Enable this option if you want to draw cables as straight lines '
+                    'instead of curves.')
     )
 
     class Meta:
@@ -608,5 +617,5 @@ class IndividualOptionsForm(NetBoxModelForm):
             'save_coords', 'show_unconnected', 'show_cables', 'show_logical_connections', 
             'show_single_cable_logical_conns', 'show_neighbors', 'show_circuit', 'show_power', 
             'show_wireless', 'group_sites', 'group_locations', 'group_racks', 'draw_default_layout',
-            'disable_physics'
+            'disable_physics', 'straight_cables'
         ]        
