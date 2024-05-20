@@ -1,5 +1,6 @@
 import json
 from functools import reduce
+import random
 from typing import DefaultDict, Dict, Optional, Union
 import time
 from itertools import chain
@@ -97,7 +98,7 @@ def get_image_for_entity(entity: Union[Device, Circuit, PowerPanel, PowerFeed]):
 
 
 def create_node(
-    device: Union[Device, Circuit, PowerPanel, PowerFeed], save_coords: bool, group_id="default"
+    device: Union[Device, Circuit, PowerPanel, PowerFeed], save_coords: bool, disable_physics: bool, group_id="default", nnodes=1,
 ):
     node = {}
     node_content = ""
@@ -200,11 +201,12 @@ def create_node(
         if not group_id:
             print('Exception occured while handling default group.')
             return node
-   
+
     group = get_object_or_404(CoordinateGroup, pk=group_id)
 
-    node["physics"] = True
-    # Coords must be set even if no coords have been stored. Otherwise nodes with coords 
+    node["physics"] = not disable_physics
+
+    # Coords must be set even if no coords have been stored. Otherwise nodes with coords
     # will not be placed correctly by vis-network.
     node["x"] = 0
     node["y"] = 0
@@ -222,6 +224,21 @@ def create_node(
                 node["x"] = int(cords[0])
                 node["y"] = int(cords[1])
                 node["physics"] = False
+    elif disable_physics:
+        # draw devices clustered by their rack neighbours
+        # for center coordinates of a rack, use the rack name as seed (if available)
+        random.seed(device.rack.name if hasattr(device, "rack") else device.name)
+        # set the upper size of the graph
+        plot_size = int(nnodes / 12) + 1
+        base_coords_x = random.randint(-plot_size * nnodes, plot_size * nnodes)
+        base_coords_y = random.randint(-plot_size * nnodes, plot_size * nnodes)
+        # make seed unique for devices for spread
+        if hasattr(device, "rack"):
+            random.seed(device.name)
+        # spread devices around the rack center coordinates
+        node["x"] = base_coords_x + random.randint(-2 * nnodes, 2 * nnodes)
+        node["y"] = base_coords_y + random.randint(-2 * nnodes, 2 * nnodes)
+
 
     dev_title = "<table><tbody> %s</tbody></table>" % (node_content)
     node["title"] = dev_title
@@ -238,6 +255,7 @@ def create_edge(
     edge_id: int,
     termination_a: Dict,
     termination_b: Dict,
+    disable_physics: bool,
     straight_cables: bool,
     circuit: Optional[Dict] = None,
     cable: Optional[Cable] = None,
@@ -301,6 +319,8 @@ def create_edge(
         if hasattr(cable, 'color') and cable.color != "":
             edge["color"] = "#" + cable.color
 
+    # Invert, because value must be False if disabled
+    edge["physics"] = not disable_physics
     # if straight_cables == True: edge["smooth"] = False
     edge["smooth"] = not straight_cables
 
@@ -343,6 +363,7 @@ def get_topology_data(
     group_locations: bool,
     group_racks: bool,
     group_id,
+    disable_physics: bool,
     straight_cables: bool,
 ):
     
@@ -441,6 +462,7 @@ def get_topology_data(
                         circuit=circuit_model,
                         termination_a=termination_a,
                         termination_b=termination_b,
+                        disable_physics=disable_physics,
                         straight_cables=straight_cables,
                     )
                 )
@@ -468,7 +490,7 @@ def get_topology_data(
                         ] = circuit_termination.circuit
 
         for d in nodes_circuits.values():
-            nodes.append(create_node(d, save_coords, group_id))
+            nodes.append(create_node(d, save_coords, disable_physics, group_id))
 
     if show_power:
         power_panels_ids = PowerPanel.objects.filter(
@@ -511,6 +533,7 @@ def get_topology_data(
                         termination_a=termination_a,
                         termination_b=termination_b,
                         power=True,
+                        disable_physics=disable_physics,
                         straight_cables=straight_cables,
                     )
                 )
@@ -519,10 +542,10 @@ def get_topology_data(
                     cable_ids[power_feed.cable_id][power_feed.cable_end] = termination_b
 
         for d in nodes_powerfeed.values():
-            nodes.append(create_node(d, save_coords, group_id))
+            nodes.append(create_node(d, save_coords, disable_physics, group_id))
 
         for d in nodes_powerpanel.values():
-            nodes.append(create_node(d, save_coords, group_id))
+            nodes.append(create_node(d, save_coords, disable_physics, group_id))
 
     if show_logical_connections:
         interfaces = Interface.objects.filter(
@@ -550,7 +573,16 @@ def get_topology_data(
                     edge_ids += 1
                     termination_a = { "termination_name": interface.name, "termination_device_name": interface.device.name, "device_id": interface.device.id }
                     termination_b = { "termination_name": destination.name, "termination_device_name": destination.device.name, "device_id": destination.device.id }
-                    edges.append(create_edge(edge_id=edge_ids, termination_a=termination_a, termination_b=termination_b, interface=interface, straight_cables=straight_cables))
+                    edges.append(
+                        create_edge(
+                            edge_id=edge_ids,
+                            termination_a=termination_a,
+                            termination_b=termination_b,
+                            interface=interface,
+                            disable_physics=disable_physics,
+                            straight_cables=straight_cables
+                        )
+                    )
                     nodes_devices[interface.device.id] = interface.device
                     nodes_devices[destination.device.id] = destination.device
 
@@ -630,6 +662,7 @@ def get_topology_data(
                             cable=link.cable,
                             termination_a=termination_a,
                             termination_b=termination_b,
+                            disable_physics=disable_physics,
                             straight_cables=straight_cables,
                         )
                     )
@@ -670,6 +703,7 @@ def get_topology_data(
                     termination_a=termination_a,
                     termination_b=termination_b,
                     wireless=wireless,
+                    disable_physics=disable_physics,
                     straight_cables=straight_cables,
                 )
             )
@@ -688,7 +722,7 @@ def get_topology_data(
     results = {}
 
     for d in nodes_devices.values():
-        nodes.append(create_node(d, save_coords, group_id))
+        nodes.append(create_node(d, save_coords, disable_physics, group_id, nnodes=len(nodes_devices.keys())))
 
     results["nodes"] = nodes
     results["edges"] = edges
@@ -719,7 +753,7 @@ class TopologyHomeView(PermissionRequiredMixin, View):
 
         if request.GET:
 
-            filter_id, save_coords, show_unconnected, show_power, show_circuit, show_logical_connections, show_single_cable_logical_conns, show_cables, show_wireless, group_sites, group_locations, group_racks, show_neighbors, straight_cables = get_query_settings(request)
+            filter_id, save_coords, show_unconnected, show_power, show_circuit, show_logical_connections, show_single_cable_logical_conns, show_cables, show_wireless, group_sites, group_locations, group_racks, show_neighbors, straight_cables, disable_physics = get_query_settings(request)
             
             # Read options from saved filters as NetBox does not handle custom plugin filters
             if "filter_id" in request.GET and request.GET["filter_id"] != '':
@@ -738,6 +772,7 @@ class TopologyHomeView(PermissionRequiredMixin, View):
                     if group_locations == False and 'group_locations' in saved_filter_params: group_locations = saved_filter_params['group_locations']
                     if group_racks == False and 'group_racks' in saved_filter_params: group_racks = saved_filter_params['group_racks']
                     if show_neighbors == False and 'show_neighbors' in saved_filter_params: show_neighbors = saved_filter_params['show_neighbors']
+                    if disable_physics == False and 'disable_physics' in saved_filter_params: disable_physics = saved_filter_params['disable_physics']
                     if straight_cables == False and 'straight_cables' in saved_filter_params: straight_cables = saved_filter_params['straight_cables']
                 except SavedFilter.DoesNotExist: # filter_id not found
                     pass
@@ -766,6 +801,7 @@ class TopologyHomeView(PermissionRequiredMixin, View):
                     group_locations=group_locations,
                     group_racks=group_racks,
                     group_id=group_id,
+                    disable_physics=disable_physics,
                     straight_cables=straight_cables,
                 )
             
@@ -790,7 +826,8 @@ class TopologyHomeView(PermissionRequiredMixin, View):
             if individualOptions.group_sites: q['group_sites'] = "on"
             if individualOptions.group_locations: q['group_locations'] = "on"
             if individualOptions.group_racks: q['group_racks'] = "on"
-            if individualOptions.draw_default_layout: 
+            if individualOptions.disable_physics: q['disable_physics'] = "on"
+            if individualOptions.draw_default_layout:
                 q['draw_init'] = "true"
             else:
                 q['draw_init'] = "false"
@@ -1149,6 +1186,7 @@ class TopologyIndividualOptionsView(PermissionRequiredMixin, View):
                 'group_locations': queryset.group_locations,
                 'group_racks': queryset.group_racks,
                 'draw_default_layout': queryset.draw_default_layout,
+                'disable_physics': queryset.disable_physics,
                 'straight_cables': queryset.straight_cables,
             },
         )
