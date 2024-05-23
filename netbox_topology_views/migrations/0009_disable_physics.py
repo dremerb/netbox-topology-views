@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('netbox_topology_views', '0007_individualoptions_group_locations_and_more'),
+        ('netbox_topology_views', '0008_straight_cables'),
     ]
 
     operations = [
