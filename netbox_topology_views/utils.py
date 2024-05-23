@@ -177,8 +177,18 @@ def get_query_settings(request):
     if "show_neighbors" in request.GET:
         if request.GET["show_neighbors"] == "on" :
             show_neighbors = True
-    
-    return filter_id, save_coords, show_unconnected, show_power, show_circuit, show_logical_connections, show_single_cable_logical_conns, show_cables, show_wireless, group_sites, group_locations, group_racks, show_neighbors
+
+    disable_physics = False
+    if "disable_physics" in request.GET:
+        if request.GET["disable_physics"] == "on":
+            disable_physics = True
+
+    straight_cables = False
+    if "straight_cables" in request.GET:
+        if request.GET["straight_cables"] == "on":
+            straight_cables = True
+
+    return filter_id, save_coords, show_unconnected, show_power, show_circuit, show_logical_connections, show_single_cable_logical_conns, show_cables, show_wireless, group_sites, group_locations, group_racks, show_neighbors, disable_physics, straight_cables
 
 class LinePattern():
     wireless = [2, 10, 2, 10]
